@@ -1,6 +1,4 @@
 # pten-foundation-app
-
-## Instructions:
 ```
 pip install plotly
 pip install dash
