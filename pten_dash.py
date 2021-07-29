@@ -2,11 +2,11 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, MATCH
-import plotly.express as px
+import plotly.figure_factory as ff
 import pandas as pd
 import numpy as np
 import sys
-
+from datetime import datetime
 
 path = sys.argv[1]
 sheet_name = sys.argv[2]
@@ -15,24 +15,41 @@ df = pd.read_excel(path, sheet_name=sheet_name)
 
 num_list = [1, 2]
 
+df = df.dropna(subset=["dateOfBirth"])
+
 df["dateOfBirth"] = pd.to_datetime(df["dateOfBirth"], format="%Y")
 
 for num in num_list:
-    df[f"cancer{num}Year"] = pd.to_datetime(df[f"cancer{num}Year"], format="%Y")
+    col = f"cancer{num}Year"
+    df[col] = pd.to_datetime(df[col], format="%Y")
+    df = df.dropna(subset=[col])
 
-for i in list(df.index.values):
+index_list = list()
+
+for index in list(df.index.values):
 
     for num in num_list:
 
-        canc = df.at[i, f"cancer{num}"]
+        if index not in index_list:
 
-        if canc == "Thyroid":
+            canc = df.at[index, f"cancer{num}"]
 
-            dob = df.at[i, "dateOfBirth"]
-            doc = df.at[i, f"cancer{num}Year"]
-            delta = doc - dob
+            if canc == "Thyroid":
 
-            df.at[i, "yearsToPrimary"] = int(delta.days / 365)
+                dob = df.at[index, "dateOfBirth"]
+                doc = df.at[index, f"cancer{num}Year"]
+                delta_canc = doc - dob
+
+                delta_age = datetime.now() - dob
+
+                df.at[index, "yearsToPrimary"] = int(delta_canc.days / 365)
+                df.at[index, "age"] = int(delta_age.days / 365)
+
+                index_list.append(index)
+
+df = df.loc[index_list, :]
+
+df = df.reset_index(drop=True)
 
 app = dash.Dash(__name__)
 
@@ -69,14 +86,14 @@ def display_graphs(n_clicks, div_children):
                     {"label": x, "value": x} for x in np.sort(df["userID"].unique())
                 ],
                 multi=False,
-                value=58,
+                value=None,
                 placeholder="Patient ID",
             ),
             dcc.Dropdown(
                 id={"type": "feature-col", "index": n_clicks},
                 options=[{"label": x, "value": x} for x in list(df.columns)],
                 placeholder="Feature",
-                value="gender",
+                value=None,
                 clearable=True,
             ),
         ],
@@ -100,29 +117,57 @@ def display_graphs(n_clicks, div_children):
 )
 def update_graph(patient_id, feature_col):
 
-    dff = df.set_index("userID")
+    fig = {}
 
-    dff[feature_col] = dff[feature_col].fillna("NS")
+    if feature_col is not None:
 
-    dff.at[patient_id, "yearsToPrimary"]
+        dff = df.set_index("userID")
 
-    fig = px.histogram(
-        dff,
-        x="yearsToPrimary",
-        color=feature_col,
-        marginal="rug",
-    )
+        dff[feature_col] = dff[feature_col].fillna("Not Specified")
 
-    fig.add_vline(x=dff.at[patient_id, "yearsToPrimary"])
+        labels = list(dff[feature_col].unique())
 
-    fig.update_layout(
-        title={
-            "text": f"yearsToPrimary vs. {feature_col} (Patient ID: {patient_id})",
-            "x": 0.5,
-            "xanchor": "center",
-            "yanchor": "top",
-        }
-    )
+        remove_list = list()
+
+        if len(labels) > 1:
+
+            data = list()
+
+            for label in labels:
+
+                dfff = dff[dff[feature_col].isin(list([label]))]
+
+                val_list = list(dfff["yearsToPrimary"].to_list())
+
+                if len(val_list) < 2:
+
+                    remove_list.append(label)
+
+                else:
+                    data.append(val_list)
+
+            for remove in remove_list:
+                labels.remove(remove)
+
+            fig = ff.create_distplot(data, labels, show_hist=False)
+            text = f"yearsToPrimary vs. {feature_col}"
+
+            if patient_id is not None:
+
+                age = int(dff.at[patient_id, "age"])
+                fig.add_vline(x=age)
+                text += f"(Patient ID: {patient_id} | Age: {age} | Feature: {dff.at[patient_id, feature_col]})"
+
+            fig.update_layout(
+                title={
+                    "text": text,
+                    "x": 0.5,
+                    "xanchor": "center",
+                    "yanchor": "top",
+                }
+            )
+        else:
+            print("No Groups to Compare.")
 
     return fig
 
