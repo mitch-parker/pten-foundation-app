@@ -51,17 +51,31 @@ df = df.loc[index_list, :]
 
 df = df.reset_index(drop=True)
 
+df["patientID"] = df.index
+
 app = dash.Dash(__name__)
 
+
 app.layout = html.Div(
-    [
+    style={
+        "backgroundColor": "grey",
+    },
+    children=[
+        html.H1(
+            children="PhenoMap",
+            style={"textAlign": "center", "color": "white"},
+        ),
+        html.Div(
+            children="A clinical data exploration tool for PHTS",
+            style={"textAlign": "center", "color": "white"},
+        ),
         html.Div(
             children=[
                 html.Button("Add Chart", id="add-chart", n_clicks=0),
             ]
         ),
         html.Div(id="container", children=[]),
-    ]
+    ],
 )
 
 
@@ -83,18 +97,20 @@ def display_graphs(n_clicks, div_children):
             dcc.Dropdown(
                 id={"type": "patient-id", "index": n_clicks},
                 options=[
-                    {"label": x, "value": x} for x in np.sort(df["userID"].unique())
+                    {"label": x, "value": x} for x in np.sort(df["patientID"].unique())
                 ],
                 multi=False,
                 value=None,
                 placeholder="Patient ID",
+                style=dict(verticalAlign="top"),
             ),
             dcc.Dropdown(
                 id={"type": "feature-col", "index": n_clicks},
                 options=[{"label": x, "value": x} for x in list(df.columns)],
                 placeholder="Feature",
-                value=None,
+                value="goiter",
                 clearable=True,
+                style=dict(verticalAlign="bottom"),
             ),
         ],
     )
@@ -121,9 +137,9 @@ def update_graph(patient_id, feature_col):
 
     if feature_col is not None:
 
-        dff = df.set_index("userID")
+        dff = df.set_index("patientID")
 
-        dff[feature_col] = dff[feature_col].fillna("Not Specified")
+        dff = dff.dropna(subset=list([feature_col]))
 
         labels = list(dff[feature_col].unique())
 
@@ -154,7 +170,7 @@ def update_graph(patient_id, feature_col):
 
             if patient_id is not None:
 
-                age = int(dff.at[patient_id, "age"])
+                age = dff.at[patient_id, "age"]
                 fig.add_vline(x=age)
                 text += f"(Patient ID: {patient_id} | Age: {age} | Feature: {dff.at[patient_id, feature_col]})"
 
@@ -164,7 +180,10 @@ def update_graph(patient_id, feature_col):
                     "x": 0.5,
                     "xanchor": "center",
                     "yanchor": "top",
-                }
+                },
+                xaxis_title="yearsToPrimary",
+                yaxis_title="density",
+                legend_title=feature_col,
             )
         else:
             print("No Groups to Compare.")
