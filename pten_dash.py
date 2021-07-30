@@ -37,6 +37,8 @@ external_stylesheets = [
 
 app = dash.Dash(__name__, external_scripts=external_scripts, external_stylesheets=external_stylesheets)
 
+server = app.server
+
 app.layout = html.Div([
     html.Div([
         html.H2("PhenoMap: a clinical data explorer for PTEN", className="display-2"),
