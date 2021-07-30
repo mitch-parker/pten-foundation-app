@@ -3,80 +3,52 @@ import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, MATCH
 import plotly.figure_factory as ff
-import pandas as pd
 import numpy as np
 import sys
-from datetime import datetime
+
+from data_processor import fetch_data
 
 path = sys.argv[1]
 sheet_name = sys.argv[2]
 
-df = pd.read_excel(path, sheet_name=sheet_name)
+df = fetch_data(path, sheet_name)
 
-num_list = [1, 2]
+# Visualization
 
-df = df.dropna(subset=["dateOfBirth"])
+# external JavaScript files
+external_scripts = [
+    {
+        'src': 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js',
+        'integrity': 'sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM',
+        'crossorigin': 'anonymous'
+    }
+]
 
-df["dateOfBirth"] = pd.to_datetime(df["dateOfBirth"], format="%Y")
+# external CSS stylesheets
+external_stylesheets = [
+    'https://codepen.io/chriddyp/pen/bWLwgP.css',
+    {
+        'href': 'https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css',
+        'rel': 'stylesheet',
+        'integrity': 'sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC',
+        'crossorigin': 'anonymous'
+    }
+]
 
-for num in num_list:
-    col = f"cancer{num}Year"
-    df[col] = pd.to_datetime(df[col], format="%Y")
-    df = df.dropna(subset=[col])
+app = dash.Dash(__name__, external_scripts=external_scripts, external_stylesheets=external_stylesheets)
 
-index_list = list()
-
-for index in list(df.index.values):
-
-    for num in num_list:
-
-        if index not in index_list:
-
-            canc = df.at[index, f"cancer{num}"]
-
-            if canc == "Thyroid":
-
-                dob = df.at[index, "dateOfBirth"]
-                doc = df.at[index, f"cancer{num}Year"]
-                delta_canc = doc - dob
-
-                delta_age = datetime.now() - dob
-
-                df.at[index, "yearsToPrimary"] = int(delta_canc.days / 365)
-                df.at[index, "age"] = int(delta_age.days / 365)
-
-                index_list.append(index)
-
-df = df.loc[index_list, :]
-
-df = df.reset_index(drop=True)
-
-df["patientID"] = df.index
-
-app = dash.Dash(__name__)
-
-
-app.layout = html.Div(
-    style={
-        "backgroundColor": "grey",
-    },
-    children=[
-        html.H1(
-            children="PhenoMap",
-            style={"textAlign": "center", "color": "white"},
-        ),
-        html.Div(
-            children="A clinical data exploration tool for PHTS",
-            style={"textAlign": "center", "color": "white"},
-        ),
-        html.Div(
-            children=[
-                html.Button("Add Chart", id="add-chart", n_clicks=0),
-            ]
-        ),
-        html.Div(id="container", children=[]),
-    ],
-)
+app.layout = html.Div([
+    html.Div([
+        html.H2("PhenoMap: a clinical data explorer for PTEN", className="display-2"),
+        html.P('A data visualization tool that helps a clinician evaluate whether or not to remove a thyroid gland', className="lead")
+    ]),
+    html.Div(
+        children=[
+            html.Button("Add Chart", id="add-chart", n_clicks=0),
+        ]
+    ),
+    html.Div(id="container", children=[], className="row"),
+], className="container", style={"fontSize": "14px"})
 
 
 @app.callback(
@@ -86,12 +58,13 @@ app.layout = html.Div(
 )
 def display_graphs(n_clicks, div_children):
     new_child = html.Div(
-        style={
-            "width": "45%",
-            "display": "inline-block",
-            "outline": "thin lightgrey solid",
-            "padding": 10,
-        },
+        # style={
+        #     # "width": "45%",
+        #     "display": "inline-block",
+        #     "outline": "thin lightgrey solid",
+        #     "padding": 10,
+        # },
+        className="col-lg-6",
         children=[
             dcc.Graph(id={"type": "dynamic-graph", "index": n_clicks}, figure={}),
             dcc.Dropdown(
@@ -106,7 +79,7 @@ def display_graphs(n_clicks, div_children):
             ),
             dcc.Dropdown(
                 id={"type": "feature-col", "index": n_clicks},
-                options=[{"label": x, "value": x} for x in list(df.columns)],
+                options=[{"label": x, "value": x} for x in sorted(list(df.columns))],
                 placeholder="Feature",
                 value="goiter",
                 clearable=True,
@@ -139,7 +112,8 @@ def update_graph(patient_id, feature_col):
 
         dff = df.set_index("patientID")
 
-        dff = dff.dropna(subset=list([feature_col]))
+        # dff[feature_col] = dff[feature_col].fillna("Not Specified")
+        dff = dff.dropna(subset=[feature_col])
 
         labels = list(dff[feature_col].unique())
 
