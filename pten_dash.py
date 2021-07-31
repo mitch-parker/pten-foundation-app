@@ -1,7 +1,9 @@
+from typing import Text
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, MATCH
+from dash_html_components.Label import Label
 import plotly.figure_factory as ff
 import numpy as np
 import sys
@@ -51,33 +53,74 @@ app.layout = html.Div([
         html.P('A clinical data explorer for PTEN', className="lead"),
         html.Hr(className="lead col-3 mx-auto")
     ], className="text-center mb-5"),
+
     html.Div(
         children=[
-            html.Button("Add Chart", id="add-chart", n_clicks=0),
-            dcc.Dropdown(
-                id="patient-id",
-                options=[
-                    {"label": x, "value": x} for x in np.sort(df["PatientID"].unique())
-                ],
-                multi=False,
-                value=None,
-                placeholder="Patient ID",
-                style=dict(verticalAlign="top"),
-            ),
+            html.Div([
+                html.Label("Patient ID", htmlFor="patient-id", className="col-sm-2 col-form-label"),
+                html.Div([
+                    dcc.Dropdown(
+                        id="patient-id",
+                        options=[
+                            {"label": x, "value": x} for x in np.sort(df["PatientID"].unique())
+                        ],
+                        multi=False,
+                        value=None,
+                        placeholder="Select a patient to see their current disease progression",
+                        style=dict(verticalAlign="top"),
+                    )
+                ], className="col-sm-10")
+            ], className="mb-3 row"),
+            html.Div(id="patient-card", children=[]),
+            html.Button("Add Chart", id="add-chart", n_clicks=0, className="my-5"),
         ]
     ),
     html.Div(id="container", children=[], className="row"),
 ], className="container", style={"fontSize": "14px"})
 
+@app.callback(
+    Output("patient-card", "children"),
+    [Input("patient-id", "value")],
+    [State("patient-card", "children")],
+)
+def show_patient_card(patient_id, patient_card_children):
+    dff = df.set_index("PatientID")
+    patient_card_children = []
+    if patient_id is not None:
+        patient_card_children = [
+            html.Div([
+                html.Div([
+                    html.Div([
+                        html.Img(
+                            src="https://t3.ftcdn.net/jpg/01/18/01/98/360_F_118019822_6CKXP6rXmVhDOzbXZlLqEM2ya4HhYzSV.jpg", 
+                            className="img-fluid rounded-start", alt=f"{patient_id}'s profile photo")
+                    ], className="col-md-4"),
+                    html.Div([
+                        html.Div([
+                            html.H4(f"Patient ID: {patient_id}", className="card-title"),
+                            html.Ul([
+                                # gender	CountryOFBirth	dateOfBirth	unitOfMeasure	patientHeight	patientWeight
+                                html.Li(f"Gender: {dff.at[patient_id, 'gender']}"),
+                                html.Li(f"Country of birth: {dff.at[patient_id, 'CountryOFBirth']}"),
+                                html.Li(f"Age: {dff.at[patient_id, 'age']}"),
+                                html.Li(f"Height: {dff.at[patient_id, 'patientHeight']}"),
+                                html.Li(f"Weight: {dff.at[patient_id, 'patientWeight']}")
+                            ], className="card-text")
+                        ], className="card-body"),
+                    ], className="col-md-8"),
+                ], className="row g-0")
+            ], className="card mb-3 col-lg-6")
+        ]
+    return patient_card_children
 
 @app.callback(
     Output("container", "children"),
     [Input("add-chart", "n_clicks")],
     [State("container", "children")],
 )
-def display_graphs(n_clicks, div_children):
-    new_child = html.Div(
-        className="col-lg-6 p-4",
+def display_graphs(n_clicks, chart_container_children):
+    new_chart = html.Div(
+        className="col-xl-6 p-4",
         children=[
             dcc.Graph(id={"type": "dynamic-graph", "index": n_clicks}, figure={}),
             dcc.Dropdown(
@@ -90,8 +133,8 @@ def display_graphs(n_clicks, div_children):
             ),
         ],
     )
-    div_children.append(new_child)
-    return div_children
+    chart_container_children.append(new_chart)
+    return chart_container_children
 
 
 @app.callback(
@@ -132,11 +175,11 @@ def update_graph(patient_id, feature_col):
                 labels.remove(remove)
             
             fig = ff.create_distplot(data, labels, show_hist=False)
-            text = f"yearsToPrimary vs. {feature_col}"
+            text = ""
             if patient_id is not None:
                 age = dff.at[patient_id, "age"]
                 fig.add_vline(x=age)
-                text += f"(Patient ID: {patient_id} | Age: {age} | {feature_col}: {dff.at[patient_id, feature_col]})"
+                text += f"(Patient ID: {patient_id} | {feature_col}: {dff.at[patient_id, feature_col]})"
             
             fig.update_layout(
                 title={
@@ -145,8 +188,8 @@ def update_graph(patient_id, feature_col):
                     "xanchor": "center",
                     "yanchor": "top",
                 },
-                xaxis_title="yearsToPrimary",
-                yaxis_title="density",
+                xaxis_title="Years to Primary",
+                yaxis_title="Fraction of cancer patients",
                 legend_title=feature_col,
             )
         
