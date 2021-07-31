@@ -1,12 +1,11 @@
-from typing import Text
+import os
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State, MATCH
-from dash_html_components.Label import Label
 import plotly.figure_factory as ff
 import numpy as np
-import sys
 
 from data_processor import fetch_data
 
@@ -18,7 +17,8 @@ sheet_name = "pos-neg-samples-v4"
 
 df = fetch_data(path, sheet_name)
 
-non_plottable_cols = ["geneticMutationC", "geneticMutationP"]
+non_plottable_cols = ["geneticMutationC", "geneticMutationP", "durationCytomel", "geneticTestYear", "alcohol"]
+df = df.drop(columns=non_plottable_cols)
 
 # Visualization
 
@@ -42,17 +42,23 @@ external_stylesheets = [
     }
 ]
 
-app = dash.Dash(__name__, external_scripts=external_scripts, external_stylesheets=external_stylesheets)
+metas = [
+    dict(name="viewport", content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no")
+]
+app = dash.Dash(__name__, meta_tags=metas, title="PhenoMap - a clinical data explorer for PTEN", external_scripts=external_scripts, external_stylesheets=external_stylesheets)
 
 server = app.server
 
-app.layout = html.Div([
-    html.Div([
+def create_header():
+    return html.Div([
         html.H2("PhenoMap", className="display-2"),
         # TODO: caption looks too small
         html.P('A clinical data explorer for PTEN', className="lead"),
         html.Hr(className="lead col-3 mx-auto")
-    ], className="text-center mb-5"),
+    ], className="text-center mb-5")
+
+app.layout = html.Div([
+    create_header(),
 
     html.Div(
         children=[
@@ -72,10 +78,11 @@ app.layout = html.Div([
                 ], className="col-sm-10")
             ], className="mb-3 row"),
             html.Div(id="patient-card", children=[]),
-            html.Button("Add Chart", id="add-chart", n_clicks=0, className="my-5"),
         ]
     ),
     html.Div(id="container", children=[], className="row"),
+    html.Hr(),
+    html.Button("Add Chart", id="add-chart", n_clicks=0, className="my-5"),
 ], className="container", style={"fontSize": "14px"})
 
 @app.callback(
@@ -130,6 +137,7 @@ def display_graphs(n_clicks, chart_container_children):
                 value="goiter",
                 clearable=True,
                 style=dict(verticalAlign="bottom"),
+                className="col-md-6"
             ),
         ],
     )
@@ -179,7 +187,7 @@ def update_graph(patient_id, feature_col):
             if patient_id is not None:
                 age = dff.at[patient_id, "age"]
                 fig.add_vline(x=age)
-                text += f"(Patient ID: {patient_id} | {feature_col}: {dff.at[patient_id, feature_col]})"
+                text += f"Patient ID: {patient_id} | {feature_col}: {dff.at[patient_id, feature_col]}"
             
             fig.update_layout(
                 title={
@@ -200,5 +208,5 @@ def update_graph(patient_id, feature_col):
 
 
 if __name__ == "__main__":
-
-    app.run_server(debug=True)
+    debug_mode = os.environ.get("DEBUG", "False").lower() == "true"
+    app.run_server(debug=debug_mode)
