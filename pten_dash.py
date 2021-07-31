@@ -8,10 +8,15 @@ import sys
 
 from data_processor import fetch_data
 
-path = sys.argv[1]
-sheet_name = sys.argv[2]
+# path = sys.argv[1] 
+# sheet_name = sys.argv[2]
+
+path = "data/PTEN Patients Data.xlsx"
+sheet_name = "pos-neg-samples-v4"
 
 df = fetch_data(path, sheet_name)
+
+non_plottable_cols = ["geneticMutationC", "geneticMutationP"]
 
 # Visualization
 
@@ -41,12 +46,24 @@ server = app.server
 
 app.layout = html.Div([
     html.Div([
-        html.H2("PhenoMap: a clinical data explorer for PTEN", className="display-2"),
-        html.P('A data visualization tool that helps a clinician evaluate whether or not to remove a thyroid gland', className="lead")
-    ]),
+        html.H2("PhenoMap", className="display-2"),
+        # TODO: caption looks too small
+        html.P('A clinical data explorer for PTEN', className="lead"),
+        html.Hr(className="lead col-3 mx-auto")
+    ], className="text-center mb-5"),
     html.Div(
         children=[
             html.Button("Add Chart", id="add-chart", n_clicks=0),
+            dcc.Dropdown(
+                id="patient-id",
+                options=[
+                    {"label": x, "value": x} for x in np.sort(df["PatientID"].unique())
+                ],
+                multi=False,
+                value=None,
+                placeholder="Patient ID",
+                style=dict(verticalAlign="top"),
+            ),
         ]
     ),
     html.Div(id="container", children=[], className="row"),
@@ -60,25 +77,9 @@ app.layout = html.Div([
 )
 def display_graphs(n_clicks, div_children):
     new_child = html.Div(
-        # style={
-        #     # "width": "45%",
-        #     "display": "inline-block",
-        #     "outline": "thin lightgrey solid",
-        #     "padding": 10,
-        # },
-        className="col-lg-6",
+        className="col-lg-6 p-4",
         children=[
             dcc.Graph(id={"type": "dynamic-graph", "index": n_clicks}, figure={}),
-            dcc.Dropdown(
-                id={"type": "patient-id", "index": n_clicks},
-                options=[
-                    {"label": x, "value": x} for x in np.sort(df["patientID"].unique())
-                ],
-                multi=False,
-                value=None,
-                placeholder="Patient ID",
-                style=dict(verticalAlign="top"),
-            ),
             dcc.Dropdown(
                 id={"type": "feature-col", "index": n_clicks},
                 options=[{"label": x, "value": x} for x in sorted(list(df.columns))],
@@ -97,7 +98,7 @@ def display_graphs(n_clicks, div_children):
     Output({"type": "dynamic-graph", "index": MATCH}, "figure"),
     [
         Input(
-            component_id={"type": "patient-id", "index": MATCH},
+            component_id="patient-id",
             component_property="value",
         ),
         Input(
@@ -107,49 +108,36 @@ def display_graphs(n_clicks, div_children):
     ],
 )
 def update_graph(patient_id, feature_col):
-
     fig = {}
 
     if feature_col is not None:
-
-        dff = df.set_index("patientID")
-
+        dff = df.set_index("PatientID")
         # dff[feature_col] = dff[feature_col].fillna("Not Specified")
         dff = dff.dropna(subset=[feature_col])
-
         labels = list(dff[feature_col].unique())
-
+        
         remove_list = list()
-
         if len(labels) > 1:
-
             data = list()
-
+            
             for label in labels:
-
                 dfff = dff[dff[feature_col].isin(list([label]))]
-
                 val_list = list(dfff["yearsToPrimary"].to_list())
-
                 if len(val_list) < 2:
-
                     remove_list.append(label)
-
                 else:
                     data.append(val_list)
-
+            
             for remove in remove_list:
                 labels.remove(remove)
-
+            
             fig = ff.create_distplot(data, labels, show_hist=False)
             text = f"yearsToPrimary vs. {feature_col}"
-
             if patient_id is not None:
-
                 age = dff.at[patient_id, "age"]
                 fig.add_vline(x=age)
-                text += f"(Patient ID: {patient_id} | Age: {age} | Feature: {dff.at[patient_id, feature_col]})"
-
+                text += f"(Patient ID: {patient_id} | Age: {age} | {feature_col}: {dff.at[patient_id, feature_col]})"
+            
             fig.update_layout(
                 title={
                     "text": text,
@@ -161,9 +149,10 @@ def update_graph(patient_id, feature_col):
                 yaxis_title="density",
                 legend_title=feature_col,
             )
+        
         else:
             print("No Groups to Compare.")
-
+    
     return fig
 
 
