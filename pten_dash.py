@@ -1,4 +1,5 @@
 import os
+import sys
 
 import dash
 import dash_core_components as dcc
@@ -9,11 +10,8 @@ import numpy as np
 
 from data_processor import fetch_data
 
-# path = sys.argv[1] 
-# sheet_name = sys.argv[2]
-
-path = "data/PTEN Patients Data.xlsx"
-sheet_name = "pos-neg-samples-v4"
+path = sys.argv[1] 
+sheet_name = sys.argv[2]
 
 df = fetch_data(path, sheet_name)
 
